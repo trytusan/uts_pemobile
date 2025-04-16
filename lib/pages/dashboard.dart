@@ -24,14 +24,25 @@ class _DashboardPageState extends State<DashboardPage> {
     _reportsFuture = _loadReports();
   }
 
+  // Fungsi untuk memastikan hanya satu report per NIM
+  List<Report> _uniqueByNim(List<Report> reports) {
+    final seenNims = <String>{};
+    return reports.where((report) {
+      final isNew = !seenNims.contains(report.nim);
+      seenNims.add(report.nim);
+      return isNew;
+    }).toList();
+  }
+
   Future<List<Report>> _loadReports() async {
     try {
       final data = await DataListService().getAllReports();
+      final uniqueData = _uniqueByNim(data);
       setState(() {
-        _allReports = data;
-        _filteredReports = data;
+        _allReports = uniqueData;
+        _filteredReports = uniqueData;
       });
-      return data;
+      return uniqueData;
     } catch (e) {
       print('❌ Error: $e');
       rethrow;
@@ -47,7 +58,7 @@ class _DashboardPageState extends State<DashboardPage> {
     }).toList();
 
     setState(() {
-      _filteredReports = filtered;
+      _filteredReports = _uniqueByNim(filtered);
     });
   }
 
