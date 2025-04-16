@@ -13,23 +13,42 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  late Future<List<Report>> _reports;
+  Future<List<Report>>? _reportsFuture;
+  List<Report> _allReports = [];
+  List<Report> _filteredReports = [];
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _reports = _loadReports();
+    _reportsFuture = _loadReports();
   }
 
   Future<List<Report>> _loadReports() async {
     try {
       final data = await DataListService().getAllReports();
-      print('✅ Total data report: ${data.length}');
+      setState(() {
+        _allReports = data;
+        _filteredReports = data;
+      });
       return data;
     } catch (e) {
-      print('❌ Error saat mengambil data: $e');
+      print('❌ Error: $e');
       rethrow;
     }
+  }
+
+  void _filterReports(String query) {
+    final lowerQuery = query.toLowerCase();
+    final filtered = _allReports.where((report) {
+      return report.nim.toLowerCase().contains(lowerQuery) ||
+          report.titleIssues.toLowerCase().contains(lowerQuery) ||
+          report.divisionDepartmentName.toLowerCase().contains(lowerQuery);
+    }).toList();
+
+    setState(() {
+      _filteredReports = filtered;
+    });
   }
 
   Future<void> _deleteReport(String idCustomerService) async {
@@ -38,8 +57,11 @@ class _DashboardPageState extends State<DashboardPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Report berhasil dihapus')),
       );
+      final updatedReports = await _loadReports();
       setState(() {
-        _reports = _loadReports(); // refresh setelah hapus
+        _searchController.clear();
+        _allReports = updatedReports;
+        _filteredReports = updatedReports;
       });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -62,8 +84,11 @@ class _DashboardPageState extends State<DashboardPage> {
     );
 
     if (result == true) {
+      final updatedReports = await _loadReports();
       setState(() {
-        _reports = _loadReports(); // refresh jika update sukses
+        _searchController.clear();
+        _allReports = updatedReports;
+        _filteredReports = updatedReports;
       });
     }
   }
@@ -75,8 +100,11 @@ class _DashboardPageState extends State<DashboardPage> {
     );
 
     if (result == true) {
+      final updatedReports = await _loadReports();
       setState(() {
-        _reports = _loadReports(); // refresh jika create sukses
+        _searchController.clear();
+        _allReports = updatedReports;
+        _filteredReports = updatedReports;
       });
     }
   }
@@ -84,67 +112,134 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Dashboard Report")),
-      body: FutureBuilder<List<Report>>(
-        future: _reports,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          } else if (snapshot.hasError) {
-            return Center(child: Text('Gagal memuat data: ${snapshot.error}'));
-          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('Belum ada report'));
-          }
-
-          final List<Report> reportList = snapshot.data!;
-
-          return ListView.builder(
-            itemCount: reportList.length,
-            itemBuilder: (context, index) {
-              final report = reportList[index];
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: ListTile(
-                  leading: const Icon(Icons.person),
-                  title: Text('NIM: ${report.nim}'),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Judul: ${report.titleIssues}'),
-                      Text('Divisi: ${report.divisionDepartmentName}'),
-                      Text('Prioritas: ${report.priorityName}'),
-                    ],
-                  ),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (value) {
-                      if (value == 'edit') {
-                        _editReport(report);
-                      } else if (value == 'delete') {
-                        _deleteReport(report.idCustomerService);
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'edit',
-                        child: Text('Edit'),
-                      ),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Text('Hapus'),
-                      ),
-                    ],
-                  ),
-                  onTap: () => _showDetail(report.nim),
-                ),
-              );
-            },
-          );
-        },
+      backgroundColor: Colors.grey.shade100,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.blueAccent, Colors.lightBlueAccent],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: AppBar(
+            title: const Text("Dashboard Report"),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            foregroundColor: Colors.white,
+          ),
+        ),
       ),
-      floatingActionButton: FloatingActionButton(
+      body: _reportsFuture == null
+          ? const Center(child: CircularProgressIndicator())
+          : FutureBuilder<List<Report>>(
+              future: _reportsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                } else if (snapshot.hasError) {
+                  return Center(
+                      child: Text('Gagal memuat data: ${snapshot.error}'));
+                }
+
+                return Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Column(
+                    children: [
+                      TextField(
+                        controller: _searchController,
+                        onChanged: _filterReports,
+                        decoration: InputDecoration(
+                          hintText: "Search by NIM, Title or Division",
+                          prefixIcon: const Icon(Icons.search),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 20),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: _filteredReports.isEmpty
+                            ? const Center(child: Text('No reports found.'))
+                            : ListView.builder(
+                                itemCount: _filteredReports.length,
+                                itemBuilder: (context, index) {
+                                  final report = _filteredReports[index];
+                                  return Card(
+                                    elevation: 4,
+                                    margin:
+                                        const EdgeInsets.symmetric(vertical: 8),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: ListTile(
+                                      contentPadding:
+                                          const EdgeInsets.all(16),
+                                      leading: const CircleAvatar(
+                                        backgroundColor: Colors.blueAccent,
+                                        child: Icon(Icons.person,
+                                            color: Colors.white),
+                                      ),
+                                      title: Text(
+                                        report.titleIssues,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      subtitle: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const SizedBox(height: 6),
+                                          Text("NIM: ${report.nim}"),
+                                          Text(
+                                              "Divisi: ${report.divisionDepartmentName}"),
+                                          Text(
+                                              "Prioritas: ${report.priorityName}"),
+                                        ],
+                                      ),
+                                      trailing: PopupMenuButton<String>(
+                                        onSelected: (value) {
+                                          if (value == 'edit') {
+                                            _editReport(report);
+                                          } else if (value == 'delete') {
+                                            _deleteReport(
+                                                report.idCustomerService);
+                                          }
+                                        },
+                                        itemBuilder: (context) => [
+                                          const PopupMenuItem(
+                                            value: 'edit',
+                                            child: Text('Edit'),
+                                          ),
+                                          const PopupMenuItem(
+                                            value: 'delete',
+                                            child: Text('Hapus'),
+                                          ),
+                                        ],
+                                      ),
+                                      onTap: () => _showDetail(report.nim),
+                                    ),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: _createReport,
-        tooltip: 'Tambah Report',
-        child: const Icon(Icons.add),
+        icon: const Icon(Icons.add),
+        label: const Text("Tambah Report"),
+        backgroundColor: Colors.blueAccent,
       ),
     );
   }

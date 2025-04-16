@@ -46,6 +46,9 @@ class _EditReportPageState extends State<EditReportPage> {
   Future<void> _pickImage() async {
     showModalBottomSheet(
       context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (BuildContext context) {
         return SafeArea(
           child: Column(
@@ -102,7 +105,7 @@ class _EditReportPageState extends State<EditReportPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Report updated successfully')),
           );
-          Navigator.pop(context);
+          Navigator.pop(context, true);
         }
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -115,79 +118,141 @@ class _EditReportPageState extends State<EditReportPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Edit Report")),
+      backgroundColor: Colors.grey.shade100,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.blueAccent, Colors.lightBlueAccent],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: AppBar(
+            title: const Text("Edit Report"),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            foregroundColor: Colors.white,
+          ),
+        ),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              TextFormField(
-                controller: _nimController,
-                decoration: const InputDecoration(labelText: 'NIM'),
-                validator: (value) => value!.isEmpty ? 'NIM cannot be empty' : null,
+        child: Card(
+          elevation: 6,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Form(
+              key: _formKey,
+              child: ListView(
+                children: [
+                  TextFormField(
+                    controller: _nimController,
+                    decoration: const InputDecoration(
+                      labelText: 'NIM',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) => value!.isEmpty ? 'NIM cannot be empty' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _titleController,
+                    decoration: const InputDecoration(
+                      labelText: 'Issue Title',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) => value!.isEmpty ? 'Title cannot be empty' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _descriptionController,
+                    decoration: const InputDecoration(
+                      labelText: 'Issue Description',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 4,
+                    validator: (value) => value!.isEmpty ? 'Description is required' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Rating (1–5): ${_rating.toInt()}'),
+                  Slider(
+                    min: 1,
+                    max: 5,
+                    divisions: 4,
+                    value: _rating,
+                    label: _rating.toInt().toString(),
+                    activeColor: Colors.blueAccent,
+                    onChanged: (val) {
+                      setState(() {
+                        _rating = val;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.image),
+                    label: const Text("Select Image"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.lightBlueAccent,
+                    ),
+                    onPressed: _pickImage,
+                  ),
+                  if (_selectedImage != null)
+                    Container(
+                      margin: const EdgeInsets.only(top: 12),
+                      height: 120,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(
+                          _selectedImage!,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: _selectedDivision,
+                    decoration: const InputDecoration(
+                      labelText: 'Division',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: _divisions.map((div) {
+                      return DropdownMenuItem(value: div, child: Text(div));
+                    }).toList(),
+                    onChanged: (val) => setState(() => _selectedDivision = val),
+                    validator: (val) => val == null ? 'Please select a division' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: _selectedPriority,
+                    decoration: const InputDecoration(
+                      labelText: 'Priority',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: _priorities.map((prior) {
+                      return DropdownMenuItem(value: prior, child: Text(prior));
+                    }).toList(),
+                    onChanged: (val) => setState(() => _selectedPriority = val),
+                    validator: (val) => val == null ? 'Please select a priority' : null,
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: _submitEdit,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: const Text("Save Changes", style: TextStyle(fontSize: 16)),
+                  ),
+                ],
               ),
-              TextFormField(
-                controller: _titleController,
-                decoration: const InputDecoration(labelText: 'Issue Title'),
-                validator: (value) => value!.isEmpty ? 'Title cannot be empty' : null,
-              ),
-              TextFormField(
-                controller: _descriptionController,
-                decoration: const InputDecoration(labelText: 'Issue Description'),
-                maxLines: 4,
-                validator: (value) => value!.isEmpty ? 'Description is required' : null,
-              ),
-              const SizedBox(height: 10),
-              Text('Rating (1–5): ${_rating.toInt()}'),
-              Slider(
-                min: 1,
-                max: 5,
-                divisions: 4,
-                value: _rating,
-                label: _rating.toInt().toString(),
-                onChanged: (val) {
-                  setState(() {
-                    _rating = val;
-                  });
-                },
-              ),
-              const SizedBox(height: 10),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.image),
-                label: const Text("Select Image"),
-                onPressed: _pickImage,
-              ),
-              if (_selectedImage != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8.0),
-                  child: Image.file(_selectedImage!, height: 100),
-                ),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                value: _selectedDivision,
-                decoration: const InputDecoration(labelText: 'Division'),
-                items: _divisions.map((div) {
-                  return DropdownMenuItem(value: div, child: Text(div));
-                }).toList(),
-                onChanged: (val) => setState(() => _selectedDivision = val),
-                validator: (val) => val == null ? 'Please select a division' : null,
-              ),
-              DropdownButtonFormField<String>(
-                value: _selectedPriority,
-                decoration: const InputDecoration(labelText: 'Priority'),
-                items: _priorities.map((prior) {
-                  return DropdownMenuItem(value: prior, child: Text(prior));
-                }).toList(),
-                onChanged: (val) => setState(() => _selectedPriority = val),
-                validator: (val) => val == null ? 'Please select a priority' : null,
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _submitEdit,
-                child: const Text("Save Changes"),
-              ),
-            ],
+            ),
           ),
         ),
       ),
