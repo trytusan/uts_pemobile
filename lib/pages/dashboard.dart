@@ -13,53 +13,75 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  Future<List<Report>>? _reportsFuture;
   List<Report> _allReports = [];
-  List<Report> _filteredReports = [];
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+
+  int _currentPage = 1;
+  final int _perPage = 10;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+
+  String? _selectedPriority;
+  String? _selectedDivision;
+
+  final List<String> _priorities = ['Low', 'Medium', 'High', 'Critical'];
+  final List<String> _divisions = ['Billing', 'Tech', 'OPS', 'Sales'];
 
   @override
   void initState() {
     super.initState();
-    _reportsFuture = _loadReports();
+    _loadReports();
+
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 200) {
+        _loadMoreReports();
+      }
+    });
   }
 
-  // Fungsi untuk memastikan hanya satu report per NIM
-  List<Report> _uniqueByNim(List<Report> reports) {
-    final seenNims = <String>{};
-    return reports.where((report) {
-      final isNew = !seenNims.contains(report.nim);
-      seenNims.add(report.nim);
-      return isNew;
-    }).toList();
-  }
-
-  Future<List<Report>> _loadReports() async {
+  Future<void> _loadReports() async {
     try {
-      final data = await DataListService().getAllReports();
-      final uniqueData = _uniqueByNim(data);
+      final data = await DataListService().getReportsByPage(
+        page: _currentPage,
+        limit: _perPage,
+        priority: _selectedPriority,
+        division: _selectedDivision,
+        query: _searchController.text,
+      );
+
       setState(() {
-        _allReports = uniqueData;
-        _filteredReports = uniqueData;
+        _allReports.addAll(data);
+        _currentPage++;
+        if (data.length < _perPage) _hasMore = false;
       });
-      return uniqueData;
     } catch (e) {
-      print('❌ Error: $e');
-      rethrow;
+      print('❌ Error loading reports: $e');
     }
   }
 
-  void _filterReports(String query) {
-    final lowerQuery = query.toLowerCase();
-    final filtered = _allReports.where((report) {
-      return report.nim.toLowerCase().contains(lowerQuery) ||
-          report.titleIssues.toLowerCase().contains(lowerQuery) ||
-          report.divisionDepartmentName.toLowerCase().contains(lowerQuery);
-    }).toList();
+  Future<void> _loadMoreReports() async {
+    if (_isLoadingMore || !_hasMore) return;
 
     setState(() {
-      _filteredReports = _uniqueByNim(filtered);
+      _isLoadingMore = true;
     });
+
+    await _loadReports();
+
+    setState(() {
+      _isLoadingMore = false;
+    });
+  }
+
+  void _applyFilter() {
+    setState(() {
+      _currentPage = 1;
+      _allReports.clear();
+      _hasMore = true;
+    });
+    _loadReports();
   }
 
   Future<void> _deleteReport(String idCustomerService) async {
@@ -68,17 +90,22 @@ class _DashboardPageState extends State<DashboardPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Report berhasil dihapus')),
       );
-      final updatedReports = await _loadReports();
-      setState(() {
-        _searchController.clear();
-        _allReports = updatedReports;
-        _filteredReports = updatedReports;
-      });
+      _resetStateAndReload();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Gagal menghapus report: $e')),
       );
     }
+  }
+
+  void _resetStateAndReload() {
+    setState(() {
+      _currentPage = 1;
+      _hasMore = true;
+      _allReports.clear();
+      _searchController.clear();
+    });
+    _loadReports();
   }
 
   void _showDetail(String nim) {
@@ -95,12 +122,7 @@ class _DashboardPageState extends State<DashboardPage> {
     );
 
     if (result == true) {
-      final updatedReports = await _loadReports();
-      setState(() {
-        _searchController.clear();
-        _allReports = updatedReports;
-        _filteredReports = updatedReports;
-      });
+      _resetStateAndReload();
     }
   }
 
@@ -111,12 +133,7 @@ class _DashboardPageState extends State<DashboardPage> {
     );
 
     if (result == true) {
-      final updatedReports = await _loadReports();
-      setState(() {
-        _searchController.clear();
-        _allReports = updatedReports;
-        _filteredReports = updatedReports;
-      });
+      _resetStateAndReload();
     }
   }
 
@@ -124,128 +141,135 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(kToolbarHeight),
-        child: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.blueAccent, Colors.lightBlueAccent],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+      appBar: AppBar(
+        title: const Text("Dashboard Report"),
+        backgroundColor: Colors.blueAccent,
+        foregroundColor: Colors.white,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: _selectedPriority,
+                    decoration: const InputDecoration(labelText: "Prioritas"),
+                    items: _priorities
+                        .map((priority) =>
+                            DropdownMenuItem(value: priority, child: Text(priority)))
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() => _selectedPriority = value);
+                      _applyFilter();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: _selectedDivision,
+                    decoration: const InputDecoration(labelText: "Divisi"),
+                    items: _divisions
+                        .map((division) =>
+                            DropdownMenuItem(value: division, child: Text(division)))
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() => _selectedDivision = value);
+                      _applyFilter();
+                    },
+                  ),
+                ),
+              ],
             ),
-          ),
-          child: AppBar(
-            title: const Text("Dashboard Report"),
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            foregroundColor: Colors.white,
-          ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _searchController,
+              onChanged: (value) => _applyFilter(),
+              decoration: InputDecoration(
+                hintText: "Search by NIM, Title or Division",
+                prefixIcon: const Icon(Icons.search),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: _allReports.isEmpty
+                  ? const Center(child: Text('No reports found.'))
+                  : ListView.builder(
+                      controller: _scrollController,
+                      itemCount: _allReports.length + (_isLoadingMore ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (index == _allReports.length) {
+                          return const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(8),
+                              child: CircularProgressIndicator(),
+                            ),
+                          );
+                        }
+
+                        final report = _allReports[index];
+                        return Card(
+                          elevation: 4,
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.all(16),
+                            leading: const CircleAvatar(
+                              backgroundColor: Colors.blueAccent,
+                              child: Icon(Icons.person, color: Colors.white),
+                            ),
+                            title: Text(
+                              report.titleIssues,
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const SizedBox(height: 6),
+                                Text("NIM: ${report.nim}"),
+                                Text("Divisi: ${report.divisionDepartmentName}"),
+                                Text("Prioritas: ${report.priorityName}"),
+                              ],
+                            ),
+                            trailing: PopupMenuButton<String>(
+                              onSelected: (value) {
+                                if (value == 'edit') {
+                                  _editReport(report);
+                                } else if (value == 'delete') {
+                                  _deleteReport(report.idCustomerService);
+                                }
+                              },
+                              itemBuilder: (context) => [
+                                const PopupMenuItem(
+                                  value: 'edit',
+                                  child: Text('Edit'),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text('Hapus'),
+                                ),
+                              ],
+                            ),
+                            onTap: () => _showDetail(report.nim),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
         ),
       ),
-      body: _reportsFuture == null
-          ? const Center(child: CircularProgressIndicator())
-          : FutureBuilder<List<Report>>(
-              future: _reportsFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                } else if (snapshot.hasError) {
-                  return Center(
-                      child: Text('Gagal memuat data: ${snapshot.error}'));
-                }
-
-                return Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    children: [
-                      TextField(
-                        controller: _searchController,
-                        onChanged: _filterReports,
-                        decoration: InputDecoration(
-                          hintText: "Search by NIM, Title or Division",
-                          prefixIcon: const Icon(Icons.search),
-                          filled: true,
-                          fillColor: Colors.white,
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 20),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: _filteredReports.isEmpty
-                            ? const Center(child: Text('No reports found.'))
-                            : ListView.builder(
-                                itemCount: _filteredReports.length,
-                                itemBuilder: (context, index) {
-                                  final report = _filteredReports[index];
-                                  return Card(
-                                    elevation: 4,
-                                    margin:
-                                        const EdgeInsets.symmetric(vertical: 8),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: ListTile(
-                                      contentPadding:
-                                          const EdgeInsets.all(16),
-                                      leading: const CircleAvatar(
-                                        backgroundColor: Colors.blueAccent,
-                                        child: Icon(Icons.person,
-                                            color: Colors.white),
-                                      ),
-                                      title: Text(
-                                        report.titleIssues,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      subtitle: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          const SizedBox(height: 6),
-                                          Text("NIM: ${report.nim}"),
-                                          Text(
-                                              "Divisi: ${report.divisionDepartmentName}"),
-                                          Text(
-                                              "Prioritas: ${report.priorityName}"),
-                                        ],
-                                      ),
-                                      trailing: PopupMenuButton<String>(
-                                        onSelected: (value) {
-                                          if (value == 'edit') {
-                                            _editReport(report);
-                                          } else if (value == 'delete') {
-                                            _deleteReport(
-                                                report.idCustomerService);
-                                          }
-                                        },
-                                        itemBuilder: (context) => [
-                                          const PopupMenuItem(
-                                            value: 'edit',
-                                            child: Text('Edit'),
-                                          ),
-                                          const PopupMenuItem(
-                                            value: 'delete',
-                                            child: Text('Hapus'),
-                                          ),
-                                        ],
-                                      ),
-                                      onTap: () => _showDetail(report.nim),
-                                    ),
-                                  );
-                                },
-                              ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _createReport,
         icon: const Icon(Icons.add),

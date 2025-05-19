@@ -7,6 +7,8 @@ import 'package:uts_aplication/models/uts_models.dart';
 class DataListService {
   final String baseUrl =
       'https://simobile.singapoly.com/api/trpl/customer-service';
+
+  // GET semua laporan
   Future<List<Report>> getAllReports() async {
     final response = await http.get(
       Uri.parse(baseUrl),
@@ -20,23 +22,70 @@ class DataListService {
       final jsonBody = jsonDecode(response.body);
       final data = jsonBody['datas'];
 
-      if (data == null) {
-        print('⚠️ DATA NULL');
-        return [];
-      }
+      if (data == null) return [];
 
       if (data is List) {
-        print('✅ DATA LIST: ${data.length} item');
         return data.map((json) => Report.fromJson(json)).toList();
       } else if (data is Map<String, dynamic>) {
-        print('✅ DATA OBJECT tunggal');
         return [Report.fromJson(data)];
       } else {
-        print('❌ FORMAT DATA TIDAK DIKENALI');
         return [];
       }
     } else {
       throw Exception('Status: ${response.statusCode}');
+    }
+  }
+
+  // ✅ GET laporan dengan pagination
+  Future<List<Report>> getReportsByPage({
+    required int page,
+    required int limit,
+    String? priority,
+    String? division,
+    String? query,
+  }) async {
+    final Map<String, String> params = {
+      'page': page.toString(),
+      'limit': limit.toString(),
+    };
+
+    if (priority != null && priority.isNotEmpty) {
+      params['priority'] = priority;
+    }
+
+    if (division != null && division.isNotEmpty) {
+      params['division'] = division;
+    }
+
+    if (query != null && query.isNotEmpty) {
+      params['search'] = query;
+    }
+
+    final uri = Uri.parse(baseUrl).replace(queryParameters: params);
+
+    final response = await http.get(
+      uri,
+      headers: {'Accept': 'application/json'},
+    );
+
+    print('📄 Fetching: $uri');
+    print('Response code: ${response.statusCode}');
+
+    if (response.statusCode == 200) {
+      final jsonBody = jsonDecode(response.body);
+      final data = jsonBody['datas'];
+
+      if (data == null) return [];
+
+      if (data is List) {
+        return data.map((json) => Report.fromJson(json)).toList();
+      } else if (data is Map<String, dynamic>) {
+        return [Report.fromJson(data)];
+      } else {
+        throw Exception('Format data tidak dikenali');
+      }
+    } else {
+      throw Exception('Gagal mengambil data halaman $page');
     }
   }
 
@@ -50,9 +99,7 @@ class DataListService {
     final jsonBody = jsonDecode(response.body);
     final dynamic data = jsonBody['datas'];
 
-    if (data == null) {
-      return [];
-    }
+    if (data == null) return [];
 
     if (data is List) {
       return data.map((json) => Report.fromJson(json)).toList();
@@ -76,8 +123,6 @@ class DataListService {
     if (response.statusCode == 200) {
       final jsonBody = jsonDecode(response.body);
       final data = jsonBody['datas'];
-
-      print('🧪 Type of data: ${data.runtimeType}');
 
       if (data == null) {
         throw Exception("❌ Data tidak ditemukan (null)");
@@ -108,10 +153,9 @@ class DataListService {
     required int idPriority,
   }) async {
     try {
-      final uri = Uri.parse('$baseUrl/2355011001'); // ⬅️ pastikan endpoint benar
+      final uri = Uri.parse('$baseUrl/2355011001');
       final request = http.MultipartRequest('POST', uri);
 
-      // Tambahkan field text
       request.fields['nim'] = nim;
       request.fields['title_issues'] = titleIssues;
       request.fields['description_issues'] = descriptionIssues;
@@ -119,23 +163,19 @@ class DataListService {
       request.fields['id_division_target'] = idDivisionTarget.toString();
       request.fields['id_priority'] = idPriority.toString();
 
-      // Tambahkan file gambar jika ada
       if (imageFile != null) {
         final stream = http.ByteStream(imageFile.openRead());
         final length = await imageFile.length();
-
         final multipartFile = http.MultipartFile(
           'image',
           stream,
           length,
           filename: imageFile.path.split('/').last,
-          contentType: MediaType('image', 'jpeg'), // Sesuaikan jika perlu
+          contentType: MediaType('image', 'jpeg'),
         );
-
         request.files.add(multipartFile);
       }
 
-      // Kirim request
       final response = await request.send();
       final responseBody = await response.stream.bytesToString();
 
@@ -163,15 +203,9 @@ class DataListService {
     required int idPriority,
   }) async {
     try {
-      final uri = Uri.parse(
-        '$baseUrl/2355011001/$idCustomerService',
-      ); // misalnya PUT ke /customer-service/{id}
-      final request = http.MultipartRequest(
-        'POST',
-        uri,
-      ); // ganti ke PUT jika backend mendukung
+      final uri = Uri.parse('$baseUrl/2355011001/$idCustomerService');
+      final request = http.MultipartRequest('POST', uri);
 
-      // Field teks
       request.fields['nim'] = nim;
       request.fields['title_issues'] = titleIssues;
       request.fields['description_issues'] = descriptionIssues;
@@ -179,11 +213,9 @@ class DataListService {
       request.fields['id_division_target'] = idDivisionTarget.toString();
       request.fields['id_priority'] = idPriority.toString();
 
-      // File gambar
       if (imageFile != null) {
         final stream = http.ByteStream(imageFile.openRead());
         final length = await imageFile.length();
-
         final multipartFile = http.MultipartFile(
           'image',
           stream,
@@ -191,11 +223,9 @@ class DataListService {
           filename: imageFile.path.split('/').last,
           contentType: MediaType('image', 'jpeg'),
         );
-
         request.files.add(multipartFile);
       }
 
-      // Kirim request
       final response = await request.send();
       final responseBody = await response.stream.bytesToString();
 
