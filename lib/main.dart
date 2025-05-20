@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:uts_aplication/pages/dashboard.dart';
+import 'package:uts_aplication/ui/dashboard_petani.dart';
 
 void main() {
   runApp(const MyApp());
@@ -16,7 +17,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: DashboardPage(),
+      home: PagePetani(),
     );
   }
 }
