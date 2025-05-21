@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:uts_aplication/pages/dashboard.dart';
+import 'package:uts_aplication/ui_planease/dashboard_planease.dart';
 import 'package:uts_aplication/ui/dashboard_petani.dart';
 
 void main() {

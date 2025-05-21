@@ -1,7 +1,9 @@
+
 import 'package:flutter/material.dart';
 import 'package:uts_aplication/models/petani_models.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 import 'package:uts_aplication/services/apipetani.dart';
+import 'package:uts_aplication/ui/detail_petani.dart';
 import 'package:uts_aplication/ui/form_petani.dart';
 
 class PagePetani extends StatefulWidget {
@@ -13,8 +15,9 @@ class PagePetani extends StatefulWidget {
 
 class _PagePetaniState extends State<PagePetani> {
   static const _pageSize = 10;
-  final PagingController<int, Petani> _pagingController =
-      PagingController(firstPageKey: 1);
+  final PagingController<int, Petani> _pagingController = PagingController(
+    firstPageKey: 1,
+  );
 
   final TextEditingController _searchController = TextEditingController();
 
@@ -47,15 +50,17 @@ class _PagePetaniState extends State<PagePetani> {
     }
   }
 
+  final String baseUrl = 'https://dev.wefgis.com/';
+
   Future<void> _deletePetani(String idPenjual) async {
     final result = await ApiStatic.deletePetani(idPenjual);
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(result
-            ? 'Data berhasil dihapus'
-            : 'Gagal menghapus data'),
+        content: Text(
+          result ? 'Data berhasil dihapus' : 'Gagal menghapus data',
+        ),
         backgroundColor: result ? Colors.green : Colors.red,
       ),
     );
@@ -69,17 +74,30 @@ class _PagePetaniState extends State<PagePetani> {
       margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       elevation: 3,
       child: ListTile(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => DetailPetani(petani: petani),
+            ),
+          );
+        },
         leading: ClipOval(
-          child: petani.foto.isNotEmpty
-              ? Image.network(
-                  petani.foto,
-                  width: 60,
-                  height: 60,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) =>
-                      const Icon(Icons.person, color: Colors.blue, size: 60),
-                )
-              : const Icon(Icons.person, size: 60, color: Colors.blue),
+          child:
+              petani.foto.isNotEmpty
+                  ? Image.network(
+                    '$baseUrl${petani.foto}',
+                    width: 60,
+                    height: 60,
+                    fit: BoxFit.cover,
+                    errorBuilder:
+                        (context, error, stackTrace) => const Icon(
+                          Icons.person,
+                          color: Colors.blue,
+                          size: 60,
+                        ),
+                  )
+                  : const Icon(Icons.person, size: 60, color: Colors.blue),
         ),
         title: Text(
           petani.nama.isNotEmpty ? petani.nama : 'Nama tidak tersedia',
@@ -105,30 +123,35 @@ class _PagePetaniState extends State<PagePetani> {
             } else if (value == 'delete') {
               showDialog(
                 context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text("Konfirmasi"),
-                  content: const Text("Yakin ingin menghapus data ini?"),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text("Batal"),
+                builder:
+                    (context) => AlertDialog(
+                      title: const Text("Konfirmasi"),
+                      content: const Text("Yakin ingin menghapus data ini?"),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text("Batal"),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _deletePetani(petani.idPenjual.toString());
+                          },
+                          child: const Text(
+                            "Hapus",
+                            style: TextStyle(color: Colors.red),
+                          ),
+                        ),
+                      ],
                     ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _deletePetani(petani.idPenjual.toString());
-                      },
-                      child: const Text("Hapus", style: TextStyle(color: Colors.red)),
-                    ),
-                  ],
-                ),
               );
             }
           },
-          itemBuilder: (context) => const [
-            PopupMenuItem(value: 'edit', child: Text('Edit')),
-            PopupMenuItem(value: 'delete', child: Text('Hapus')),
-          ],
+          itemBuilder:
+              (context) => const [
+                PopupMenuItem(value: 'edit', child: Text('Edit')),
+                PopupMenuItem(value: 'delete', child: Text('Hapus')),
+              ],
         ),
       ),
     );
@@ -190,15 +213,16 @@ class _PagePetaniState extends State<PagePetani> {
               child: PagedListView<int, Petani>(
                 pagingController: _pagingController,
                 builderDelegate: PagedChildBuilderDelegate<Petani>(
-                  itemBuilder: (context, petani, index) => _buildPetaniItem(petani),
-                  firstPageProgressIndicatorBuilder: (_) =>
-                      const Center(child: CircularProgressIndicator()),
-                  newPageProgressIndicatorBuilder: (_) =>
-                      const Center(child: CircularProgressIndicator()),
-                  firstPageErrorIndicatorBuilder: (_) =>
-                      const Center(child: Text('Gagal memuat data')),
-                  noItemsFoundIndicatorBuilder: (_) =>
-                      const Center(child: Text('Tidak ada data petani')),
+                  itemBuilder:
+                      (context, petani, index) => _buildPetaniItem(petani),
+                  firstPageProgressIndicatorBuilder:
+                      (_) => const Center(child: CircularProgressIndicator()),
+                  newPageProgressIndicatorBuilder:
+                      (_) => const Center(child: CircularProgressIndicator()),
+                  firstPageErrorIndicatorBuilder:
+                      (_) => const Center(child: Text('Gagal memuat data')),
+                  noItemsFoundIndicatorBuilder:
+                      (_) => const Center(child: Text('Tidak ada data petani')),
                 ),
               ),
             ),
@@ -212,9 +236,9 @@ class _PagePetaniState extends State<PagePetani> {
             MaterialPageRoute(builder: (context) => const PetaniForm()),
           ).then((_) => _pagingController.refresh());
         },
-        child: const Icon(Icons.add),
         tooltip: 'Tambah Petani',
         backgroundColor: Colors.blue,
+        child: const Icon(Icons.add),
       ),
     );
   }

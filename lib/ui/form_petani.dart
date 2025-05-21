@@ -1,17 +1,17 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import 'package:path/path.dart';
 import 'package:uts_aplication/models/petani_models.dart';
+import 'package:uts_aplication/services/apipetani.dart';
+import 'package:uts_aplication/models/kelompok_models.dart';
 
 class PetaniForm extends StatefulWidget {
   final Petani? petani;
 
-  const PetaniForm({Key? key, this.petani}) : super(key: key);
+  const PetaniForm({super.key, this.petani});
 
   @override
-  _PetaniFormState createState() => _PetaniFormState();
+  State<PetaniForm> createState() => _PetaniFormState();
 }
 
 class _PetaniFormState extends State<PetaniForm> {
@@ -24,15 +24,34 @@ class _PetaniFormState extends State<PetaniForm> {
   File? _image;
   final ImagePicker _picker = ImagePicker();
 
+  String idKelompok = '';
+  String? _selectedStatus;
+  String idPenjual = '';
+  List<Kelompok> _kelompok = [];
+  final String baseUrl = 'https://dev.wefgis.com/';
+
   @override
   void initState() {
     super.initState();
+    getKelompok();
     if (widget.petani != null) {
+      idPenjual = widget.petani!.idPenjual;
       namaController.text = widget.petani!.nama;
       nikController.text = widget.petani!.nik;
       alamatController.text = widget.petani!.alamat;
       telpController.text = widget.petani!.telp;
+      idKelompok = widget.petani!.idKelompokTani;
+      _selectedStatus = widget.petani!.status;
+    } else {
+      _selectedStatus = 'Y';
     }
+  }
+
+  void getKelompok() async {
+    final response = await ApiStatic.getKelompokTani();
+    setState(() {
+      _kelompok = response.toList();
+    });
   }
 
   Future<void> _pickImage() async {
@@ -43,9 +62,8 @@ class _PetaniFormState extends State<PetaniForm> {
           _image = File(picked.path);
         });
       }
-    } catch (e, stack) {
+    } catch (e) {
       print('Error picking image: $e');
-      print(stack);
     }
   }
 
@@ -53,63 +71,34 @@ class _PetaniFormState extends State<PetaniForm> {
     if (!_formKey.currentState!.validate()) return;
 
     final isEdit = widget.petani != null;
-    final uri = isEdit
-        ? Uri.parse("https://dev.wefgis.com/api/petani/${widget.petani!.idPenjual}")
-        : Uri.parse("https://dev.wefgis.com/api/petani");
+    final Map<String, String> data = {
+      'id_penjual': widget.petani?.idPenjual.toString() ?? '127',
+      'id_kelompok_tani': idKelompok,
+      'nama': namaController.text,
+      'nik': nikController.text,
+      'alamat': alamatController.text,
+      'telp': telpController.text,
+      'status': _selectedStatus ?? '',
+    };
 
-    try {
-      var request = http.MultipartRequest("POST", uri);
-      request.headers['Authorization'] = "Bearer 8|x6bKsHp9STb0uLJsM11GkWhZEYRWPbv0IqlXvFi7";
+    final success = await ApiStatic.submitPetaniManual(
+      data: data,
+      foto: _image,
+      isEdit: isEdit,
+    );
 
-      if (isEdit) {
-        request.fields['_method'] = 'PUT';
-      }
+    if (!mounted) return;
 
-      request.fields['id_penjual'] = "127";
-      request.fields['id_kelompok_tani'] = "4";
-      request.fields['nama'] = namaController.text;
-      request.fields['nik'] = nikController.text;
-      request.fields['alamat'] = alamatController.text;
-      request.fields['telp'] = telpController.text;
-      request.fields['status'] = "Y";
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(success
+            ? (isEdit ? 'Data berhasil diperbarui' : 'Data berhasil ditambahkan')
+            : 'Gagal menyimpan data'),
+        backgroundColor: success ? Colors.green : Colors.red,
+      ),
+    );
 
-      if (_image != null) {
-        var stream = http.ByteStream(_image!.openRead());
-        var length = await _image!.length();
-        var multipartFile = http.MultipartFile(
-          'foto',
-          stream,
-          length,
-          filename: basename(_image!.path),
-        );
-        request.files.add(multipartFile);
-      }
-
-      var response = await request.send();
-      var responseBody = await response.stream.bytesToString();
-
-      if (!mounted) return;
-
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(isEdit ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")),
-        );
-        Navigator.pop(context);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Gagal mengirim data: ${response.statusCode}")),
-        );
-        print(responseBody);
-      }
-    } catch (e, stack) {
-      print('Exception saat submit form: $e');
-      print(stack);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Terjadi kesalahan: $e')),
-        );
-      }
-    }
+    if (success) Navigator.pop(context);
   }
 
   @override
@@ -123,98 +112,145 @@ class _PetaniFormState extends State<PetaniForm> {
 
   @override
   Widget build(BuildContext context) {
-    final isEdit = widget.petani != null;
-
     return Scaffold(
       appBar: AppBar(
-        title: Text(isEdit ? 'Edit Petani' : 'Tambah Petani'),
+        title: Text(widget.petani != null ? 'Edit Petani' : 'Tambah Petani'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
+        centerTitle: true,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
         child: Form(
           key: _formKey,
-          child: ListView(
+          child: Column(
             children: [
-              TextFormField(
-                controller: namaController,
-                decoration: const InputDecoration(
-                  labelText: "Nama",
-                  border: OutlineInputBorder(),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.blue),
-                  ),
-                  labelStyle: TextStyle(color: Colors.blue),
+              // Foto profil
+              Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.blue.withOpacity(0.3), width: 2),
                 ),
-                validator: (value) => value!.isEmpty ? 'Wajib diisi' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: nikController,
-                decoration: const InputDecoration(
-                  labelText: "NIK",
-                  border: OutlineInputBorder(),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.blue),
-                  ),
-                  labelStyle: TextStyle(color: Colors.blue),
-                ),
-                validator: (value) => value!.isEmpty ? 'Wajib diisi' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: alamatController,
-                decoration: const InputDecoration(
-                  labelText: "Alamat",
-                  border: OutlineInputBorder(),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.blue),
-                  ),
-                  labelStyle: TextStyle(color: Colors.blue),
+                child: ClipOval(
+                  child: _image != null
+                      ? Image.file(_image!, fit: BoxFit.cover)
+                      : (widget.petani != null && widget.petani!.foto.isNotEmpty
+                          ? Image.network('$baseUrl${widget.petani!.foto}', fit: BoxFit.cover)
+                          : Icon(Icons.person, size: 60, color: Colors.grey[400])),
                 ),
               ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: telpController,
-                decoration: const InputDecoration(
-                  labelText: "Telepon",
-                  border: OutlineInputBorder(),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.blue),
-                  ),
-                  labelStyle: TextStyle(color: Colors.blue),
-                ),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
+              const SizedBox(height: 10),
+              TextButton.icon(
                 onPressed: _pickImage,
-                icon: const Icon(Icons.image),
-                label: const Text("Pilih Foto"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                ),
+                icon: const Icon(Icons.camera_alt, color: Colors.blue),
+                label: const Text("Pilih / Ganti Foto", style: TextStyle(color: Colors.blue)),
               ),
-              if (_image != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8.0),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.file(_image!, height: 150),
-                  ),
-                ),
+
+              const SizedBox(height: 20),
+              _buildTextField(namaController, 'Nama', true),
               const SizedBox(height: 16),
+              _buildTextField(nikController, 'NIK', true),
+              const SizedBox(height: 16),
+              _buildTextField(alamatController, 'Alamat'),
+              const SizedBox(height: 16),
+              _buildTextField(telpController, 'Telepon'),
+              const SizedBox(height: 16),
+              _buildKelompokDropdown(),
+              const SizedBox(height: 16),
+              _buildStatusRadio(),
+
+              const SizedBox(height: 30),
               ElevatedButton(
                 onPressed: () => _submitForm(context),
-                child: Text(isEdit ? "Update" : "Kirim"),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: Text(
+                  widget.petani != null ? 'Update' : 'Save',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, String label, [bool required = false]) {
+    return TextFormField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: Colors.blue),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        focusedBorder: const OutlineInputBorder(
+          borderSide: BorderSide(color: Colors.blue, width: 2),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+      validator: required ? (value) => value!.isEmpty ? 'Wajib diisi' : null : null,
+    );
+  }
+
+  Widget _buildKelompokDropdown() {
+    return DropdownButtonFormField<String>(
+      value: idKelompok.isEmpty ? null : idKelompok,
+      decoration: InputDecoration(
+        labelText: 'Kelompok Tani',
+        labelStyle: const TextStyle(color: Colors.blue),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+      items: _kelompok.map((item) {
+        return DropdownMenuItem(
+          value: item.idKelompokTani,
+          child: Text(item.namaKelompok),
+        );
+      }).toList(),
+      onChanged: (value) {
+        setState(() {
+          idKelompok = value!;
+        });
+      },
+      validator: (value) => value == null ? "Wajib diisi" : null,
+    );
+  }
+
+  Widget _buildStatusRadio() {
+    return FormField<String>(
+      validator: (_) => _selectedStatus == null ? 'Status wajib dipilih' : null,
+      builder: (field) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Status', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.blue)),
+          RadioListTile<String>(
+            title: const Text('Y'),
+            value: 'Y',
+            groupValue: _selectedStatus,
+            activeColor: Colors.blue,
+            onChanged: (val) => setState(() => _selectedStatus = val),
+          ),
+          RadioListTile<String>(
+            title: const Text('N'),
+            value: 'N',
+            groupValue: _selectedStatus,
+            activeColor: Colors.blue,
+            onChanged: (val) => setState(() => _selectedStatus = val),
+          ),
+          if (field.hasError)
+            Padding(
+              padding: const EdgeInsets.only(left: 16, top: 4),
+              child: Text(
+                field.errorText!,
+                style: const TextStyle(color: Colors.red),
+              ),
+            ),
+        ],
       ),
     );
   }
